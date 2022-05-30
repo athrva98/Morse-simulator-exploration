@@ -12,6 +12,7 @@ from morse_simulator.algorithms.serialization import *
 import cv2
 from scipy.spatial import distance
 from morse_simulator.algorithms.config import config
+# from cythonized_ray_tracing import Bresenham
 """
 Speeding the processing part of this script using numba
 """
@@ -168,6 +169,7 @@ class DepthCameraPose:
         self.pose_ = [pose_x, pose_y]
         if self.initial_offset == True:
             self.initial_pose = np.asarray([pose_x, pose_y])
+            self.iter_ = read_outer_iteration()
             self.initial_offset = False
         x, y, z = [], [], []
         rawPoints = points
@@ -180,18 +182,9 @@ class DepthCameraPose:
         z = np.add(z1p, pose_z)
         self.depth_data_ = np.unique(np.concatenate([x.reshape(-1,1),y.reshape(-1,1),z.reshape(-1,1)], axis = 1), axis = 0)
         self.depth_data_ = [list(self.depth_data_[:,0]),list(self.depth_data_[:,1]),list(self.depth_data_[:,2])]
-        plot_obj.scatter(x,y,c = 'k')
-        plot_obj.scatter(pose_x, pose_y,c = 'r')
-        if write_data == True: # Temporarily disabling data serialization (Saves a lot of time and is not required for RL)
-            iter_ = read_outer_iteration()
-            plt.savefig(config.savePath + f'/results/{iter_}/robot_{self.sIdx}_{self.robot_number}/{image_number}.jpg')
-            #write_occupancy_coordinates(x, y,self.sIdx, self.robot_number, image_number) # for visulaization
-            #write_robot_trajectory(pose_x, pose_y,self.sIdx, self.robot_number, image_number) # for visualization
-            #write_depth_image(rawPoints,self.sIdx, self.robot_number, image_number) # we will calculate the angles based on this (beam angles)
-            #write_pose_information(pose_x, pose_y, pose_z, yaw, pitch, roll, self.sIdx, self.robot_number, image_number) # for a 2D occupancy grid, we only need the yaw information
         return plot_obj, None, None
     
-    def ray_tracing(self, ends): # TODO : Speed this function using Numba/Cython/C++ bindings
+    def ray_tracing(self, ends): # TODO : Speed this function using Numba/Cython/C++ bindings # DONE : Implemented in Cython
         
         d0, d1 = np.diff(ends, axis=0)[0]
         if not d0 == 0 and not d1 == 0:
@@ -245,7 +238,7 @@ class DepthCameraPose:
         start = None
         start = grid_p.T[-1].reshape(1,2)
         for i in range(grid_p.T.shape[0] - 1):
-            start = grid_p.T[-1].reshape(1,2)
+            
             end = grid_p.T[i].reshape(1,2)
 
             ends = np.concatenate([start, end], axis = 0)
@@ -255,11 +248,10 @@ class DepthCameraPose:
         if not start is None:
             self.occ_map[max([0, start[0,1]-5]):min([self.occ_map.shape[1], start[0,1]+5]),
                             max([0, start[0,0]-5]):min([self.occ_map.shape[0], start[0,0]+5])] = 255 # account for robot footprint.
-        #plt.show()
         #cv2.drawContours(image=self.occ_map, contours = [grid_p.T], contourIdx = -1, color = 255, thickness=-1)
-        mask = np.logical_and([grid_p[1,:-1] < self.occ_map.shape[0]],[grid_p[0,:-1] < self.occ_map.shape[1]])[0]
-        self.occ_map[grid_p[1,:-1][mask], grid_p[0,:-1][mask]] = 0 # obstacles are occupied.
-        self.occ_map = self._inflate_obstacles(self.occ_map, np.stack([grid_p[0,:-1][mask],grid_p[1,:-1][mask]], axis = 0))
+        #mask = np.logical_and([grid_p[1,:-1] < self.occ_map.shape[0]],[grid_p[0,:-1] < self.occ_map.shape[1]])[0]
+        self.occ_map[grid_p[1,:-1], grid_p[0,:-1]] = 0 # obstacles are occupied.
+        self.occ_map = self._inflate_obstacles(self.occ_map, np.stack([grid_p[0,:-1],grid_p[1,:-1]], axis = 0))
         
         
         config.occupancy_grid = self.occ_map # this makes the occupancy grid available to the RL algorithms.
