@@ -56,8 +56,27 @@ class map_t:
 
 
 
-@numba.jit (nopython = True)
+#@numba.jit (nopython = True)
 def rotation(x, y, z, yaw, pitch, roll, cam_rotate): # fast rotation using numba
+    xyz = np.concatenate([x.reshape(1,-1), y.reshape(1,-1), z.reshape(1,-1)], axis = 0)
+    pitch -= cam_rotate
+    yaw_cos = np.cos(yaw)
+    yaw_sin = np.sin(yaw)
+    pitch_cos = np.cos(pitch)
+    pitch_sin = np.sin(pitch)
+    roll_cos = np.cos(roll)
+    roll_sin = np.sin(roll)
+    r1 = [yaw_cos * pitch_cos, yaw_cos * pitch_sin * roll_sin - yaw_sin * roll_cos,
+            yaw_cos * pitch_sin * roll_cos + yaw_sin * roll_sin]
+    r2 = [yaw_sin * pitch_cos, yaw_sin * pitch_sin * roll_sin + yaw_cos * roll_cos,
+            yaw_sin * pitch_sin * roll_cos - yaw_cos * roll_sin]
+    r3 = [-pitch_sin, pitch_cos * roll_sin, pitch_cos * roll_cos]
+    r = np.array([r1, r2, r3])
+    xyz = np.einsum('ij,jk->ik',r, xyz).T
+    return xyz[:,0], xyz[:,1], xyz[:,2]
+
+@numba.jit (nopython = True)
+def old_rotation(x, y, z, yaw, pitch, roll, cam_rotate): # fast rotation using numba
     xyz = np.array([x, y, z])
     pitch -= cam_rotate
     yaw_cos = np.cos(yaw)
@@ -74,7 +93,6 @@ def rotation(x, y, z, yaw, pitch, roll, cam_rotate): # fast rotation using numba
     r = np.array([r1, r2, r3])
     xyz = np.dot(r, xyz)
     return xyz[0], xyz[1], xyz[2]
-
 
 class DepthCameraPose:
     def _superIndex(self):
@@ -103,11 +121,15 @@ class DepthCameraPose:
         
         self.robot_pos = position
 
-    def rotation(self, x, y, z, yaw, pitch, roll, cam_rotate):
-        
-        xyz = scipy.array([x, y, z])
+    def rotation(self, x, y, z, yaw, pitch, roll, cam_rotate, old = False):
+        if old == True:
+            xyz = scipy.array([x, y, z])
 
-        xyz[0], xyz[1], xyz[2] = rotation(x, y, z, yaw, pitch, roll, cam_rotate)
+            xyz[0], xyz[1], xyz[2] = old_rotation(x, y, z, yaw, pitch, roll, cam_rotate)
+        else:
+            xyz = scipy.array([x, y, z])
+
+            xyz[0], xyz[1], xyz[2] = rotation(x, y, z, yaw, pitch, roll, cam_rotate)
         
         return xyz[0], xyz[1], xyz[2]
 
@@ -149,18 +171,15 @@ class DepthCameraPose:
             self.initial_offset = False
         x, y, z = [], [], []
         rawPoints = points
-        for i in range(0, len(points) - 12, 12):
-            xyz = struct.unpack('fff', points[i:i + 12])
-            
-            x1p, y1p, z1p = self.rotation(xyz[2], xyz[0], xyz[1], yaw, pitch, roll, math.pi/8)
-            
-            xp = round(x1p + pose_x, 1)
-            yp = round(y1p + pose_y, 1)
-            zp = round(z1p + pose_z, 1)
-            x.append(xp)
-            y.append(yp)
-            z.append(zp)
-        self.depth_data_ = [x,y,z]
+        xyz = np.frombuffer(points, dtype = np.float32)
+        # print(xyz.shape, (len(points)/12, 3))
+        xyz = np.unique(np.round(xyz.reshape(len(xyz)//3,3),1), axis = 0)
+        x1p, y1p, z1p = self.rotation(xyz[:,2], xyz[:,0], xyz[:,1], yaw, pitch, roll, math.pi/8)
+        x = np.add(x1p, pose_x)
+        y = np.add(y1p, pose_y)
+        z = np.add(z1p, pose_z)
+        self.depth_data_ = np.unique(np.concatenate([x.reshape(-1,1),y.reshape(-1,1),z.reshape(-1,1)], axis = 1), axis = 0)
+        self.depth_data_ = [list(self.depth_data_[:,0]),list(self.depth_data_[:,1]),list(self.depth_data_[:,2])]
         plot_obj.scatter(x,y,c = 'k')
         plot_obj.scatter(pose_x, pose_y,c = 'r')
         if write_data == True: # Temporarily disabling data serialization (Saves a lot of time and is not required for RL)
@@ -173,30 +192,29 @@ class DepthCameraPose:
         return plot_obj, None, None
     
     def ray_tracing(self, ends): # TODO : Speed this function using Numba/Cython/C++ bindings
-        #@numba.jit(nopython = True)
-        def connect2(ends):
-            d0, d1 = np.diff(ends, axis=0)[0]
-            if not d0 == 0 and not d1 == 0:
-                if np.abs(d0) > np.abs(d1): 
-                    return np.c_[np.arange(ends[0, 0], ends[1,0] + np.sign(d0), np.sign(d0), dtype=np.int32),
-                                 np.arange(ends[0, 1] * np.abs(d0) + np.abs(d0)//2,
-                                           ends[0, 1] * np.abs(d0) + np.abs(d0)//2 + (np.abs(d0)+1) * d1, d1, dtype=np.int32) // np.abs(d0)]
-                else:
-                    return np.c_[np.arange(ends[0, 0] * np.abs(d1) + np.abs(d1)//2,
-                                           ends[0, 0] * np.abs(d1) + np.abs(d1)//2 + (np.abs(d1)+1) * d0, d0, dtype=np.int32) // np.abs(d1),
-                                 np.arange(ends[0, 1], ends[1,1] + np.sign(d1), np.sign(d1), dtype=np.int32)]
-            elif d0 == 0:
-                #ret_val = np.arange(ends[0, 1], ends[1,1] + np.sign(d1), np.sign(d1), dtype=np.int32)
-                ret_val = np.arange(min([ends[0,1], ends[1,1]]), max([ends[0,1], ends[1,1]]), dtype=np.int32)
-                return np.c_[np.ones_like(ret_val)*ends[0,0],
-                                 ret_val]
-            elif d1 == 0:
-                ret_val = np.arange(min([ends[0,0], ends[1,0]]), max([ends[0,0], ends[1,0]]), dtype=np.int32)
-                return np.c_[ret_val,
-                                 np.ones_like(ret_val)*ends[0,1]]
+        
+        d0, d1 = np.diff(ends, axis=0)[0]
+        if not d0 == 0 and not d1 == 0:
+            if np.abs(d0) > np.abs(d1): 
+                return np.c_[np.arange(ends[0, 0], ends[1,0] + np.sign(d0), np.sign(d0), dtype=np.int32),
+                             np.arange(ends[0, 1] * np.abs(d0) + np.abs(d0)//2,
+                                       ends[0, 1] * np.abs(d0) + np.abs(d0)//2 + (np.abs(d0)+1) * d1, d1, dtype=np.int32) // np.abs(d0)]
+            else:
+                return np.c_[np.arange(ends[0, 0] * np.abs(d1) + np.abs(d1)//2,
+                                       ends[0, 0] * np.abs(d1) + np.abs(d1)//2 + (np.abs(d1)+1) * d0, d0, dtype=np.int32) // np.abs(d1),
+                             np.arange(ends[0, 1], ends[1,1] + np.sign(d1), np.sign(d1), dtype=np.int32)]
+        elif d0 == 0:
+            #ret_val = np.arange(ends[0, 1], ends[1,1] + np.sign(d1), np.sign(d1), dtype=np.int32)
+            ret_val = np.arange(min([ends[0,1], ends[1,1]]), max([ends[0,1], ends[1,1]]), dtype=np.int32)
+            return np.c_[np.ones_like(ret_val)*ends[0,0],
+                             ret_val]
+        elif d1 == 0:
+            ret_val = np.arange(min([ends[0,0], ends[1,0]]), max([ends[0,0], ends[1,0]]), dtype=np.int32)
+            return np.c_[ret_val,
+                             np.ones_like(ret_val)*ends[0,1]]
 
 
-        return connect2(ends)
+        return ends
 
     def _inflate_obstacles(self, occupancy_grid, obstacle_coordinates): # inflating the obstacles to avoid collisions
         # @numba.jit (nopython = True)
@@ -206,7 +224,7 @@ class DepthCameraPose:
                                 np.max([0, obs[0,i]-5]):np.min([occ.shape[0], obs[0,i]+5])] = 0
             return occ
         return inflate(occupancy_grid, obstacle_coordinates)
-
+    
     def occupancy_grid_update(self): # this is only used for navigation
         xdepth, ydepth, zdepth = self.depth_data_
         posex, posey = self.pose_
@@ -254,8 +272,6 @@ class DepthCameraPose:
         # cv2.imwrite('./test.png', self.occ_map)
         #print('Pose is : ', start)
         #cv2.destroyAllWindows()
-        return self.occ_map, self.pose_offset, start.reshape(-1,1) # returns the current occupancy map, pose_offset, and the pose in grid frame.
-
-
+        return self.occ_map, self.pose_offset, start.reshape(-1,1)
 
 
