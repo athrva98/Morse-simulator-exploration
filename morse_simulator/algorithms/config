@@ -1,0 +1,4 @@
+# configuration file.
+
+class config:
+    child_processes = None 

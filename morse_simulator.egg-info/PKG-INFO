@@ -1,0 +1,30 @@
+Metadata-Version: 2.1
+Name: morse-simulator
+Version: 0.0.1
+Summary: Frontier Based Exploration with the Morse Simulator for Massively parallel Quadrotor simulations on a Single Node
+Home-page: https://github.com/braincorp/morse_simulator
+Author: Athrva Pandhare
+Author-email: athrva98@gmail.com
+License: Braincorp
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Education
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Programming Language :: Python :: 2
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Topic :: Software Development :: Libraries
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Provides-Extra: tests
+License-File: LICENSE
+
+# README
+Algorithms for frontier Based Exploration In the MORSE Simulator.
+
+The exploration code is heavily adapted from [https://github.com/braincorp/bc_exploration.git]
+
+
+
