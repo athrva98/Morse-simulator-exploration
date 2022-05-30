@@ -6,5 +6,5 @@ The exploration code is heavily adapted from [https://github.com/braincorp/bc_ex
 # Installation
 
 This repository can be installed as a python package by,
-<sudo python setup.py install>
+```sudo python setup.py install```
 
