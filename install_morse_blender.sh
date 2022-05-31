@@ -1,11 +1,14 @@
 sudo apt-get update && sudo apt-get -y upgrade
-sudo apt-get install curl build-essential vin nano
+sudo apt-get install curl 
+sudo apt-get install build-essential 
+sudo apt-get install vim 
+sudo apt-get install nano
 sudo apt-get -y install libglu1-mesa-dev freeglut3-dev mesa-common-dev xterm vnc4server
 set -x \
 	&& sudo mkdir -p /usr/src/python \
 	&& sudo curl -SL "https://www.python.org/ftp/python/3.4.2/Python-3.4.2.tar.xz" \
 		| sudo tar -xJC /usr/src/python --strip-components=1 \
-	&& sudo cd /usr/src/python \
+	&& cd /usr/src/python \
 	&& sudo ./configure --enable-shared \
 	&& sudo make -j$(nproc) \
 	&& sudo make install \
@@ -25,7 +28,8 @@ cd /usr/local/bin \
 	&& sudo ln -s python-config3 python-config
 	
 sudo apt-get -y install apt-utils wget git libfreetype6 libxi-dev
-sudo apt-get -y install pkg-config cmake=3.22.1
+sudo apt-get -y install pkg-config 
+sudo apt-get install cmake
 
 sudo mkdir /opt/blender
 sudo wget -q http://mirror.cs.umn.edu/blender.org/release/Blender2.73/blender-2.73-linux-glibc211-x86_64.tar.bz2 -O /opt/blender/blender-2.73.tar.bz2
