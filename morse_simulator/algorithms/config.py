@@ -27,9 +27,9 @@ class config:
     """ Parameters for the simulation ""
     "" Instead of writing a yaml, use this as the configuration file """
     controller = 'teleport'
-    maxTime = 1000
-    total_robots = 1
-    num_robots_per_senv = 1 # This is deprecated. DO NOT CHANGE THIS. THIS FEATURE IS NOT MEANT FOR THE RL SIMULATOR.
+    maxTime = 75
+    total_robots = 10
+    num_robots_per_senv = 10 # This is deprecated. DO NOT CHANGE THIS. THIS FEATURE IS NOT MEANT FOR THE RL SIMULATOR.
     maxIterations = 1e5 # This is not meant for the RL simulator.
     
     

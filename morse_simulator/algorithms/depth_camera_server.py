@@ -2,7 +2,7 @@ import socket
 import json
 import threading
 import base64
-
+from morse_simulator.algorithms.config import config
 
 
 
@@ -39,7 +39,7 @@ class DepthCameraServer(threading.Thread):
         total_data = []
 
         while True:
-            data = self.sock.recv(65536)
+            data = self.sock.recv(65536 * (config.num_robots_per_senv+2))
             data = data.decode('utf-8')
 
             # If there is endline in message, it means this is the end of this message

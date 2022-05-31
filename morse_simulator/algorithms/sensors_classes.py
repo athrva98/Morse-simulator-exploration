@@ -1,7 +1,7 @@
 import socket
 import json
 import threading
-
+from morse_simulator.algorithms.config import config
 
 """Adapted Code"""
 
@@ -36,7 +36,7 @@ class Lidar_server(threading.Thread):
         total_data = []
 
         while True:
-            data = self.sock.recv(512)
+            data = self.sock.recv(512 * (config.num_robots_per_senv+2))
             data = data.decode('utf-8')
 
             # If there is endline in message, it means this is the end of this message
@@ -140,7 +140,7 @@ class Pose_server(threading.Thread):
         total_data = []
 
         while True:
-            data = self.sock.recv(512)
+            data = self.sock.recv(512 * (config.num_robots_per_senv+2))
             data = data.decode('utf-8')
 
             # If there is endline in message, it means this is the end of this message

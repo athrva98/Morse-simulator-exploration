@@ -143,9 +143,11 @@ class planner:
                                        obstacle_values=obstacle_values,
                                        planning_scale=1)
         #print(f'Calling Iteration Number for {robot_number}: ',self.callIteration)
-        
-        path[:,[0,1]] = path[:,[1,0]] # Dirty fix.
-        return path.astype(np.int)
+        if success == True:
+            path[:,[0,1]] = path[:,[1,0]] # Dirty fix.
+            return path.astype(np.int)
+        else:
+            return None
     def _rankFrontiersBasedOnMetric(self, state, frontiers):
         
         if self._mode == 'closest':
@@ -284,15 +286,18 @@ class planner:
         c_occupancy_map = occupancy_map.data.astype(np.uint8)
 
         obstacle_values = np.asarray(obstacle_values).astype(np.uint8)
-        
-        success, path_px = c_astar(c_start,
-                                   c_goal,
-                                   c_occupancy_map,
-                                   obstacle_values,
-                                   delta,
-                                   epsilon,
-                                   planning_scale,
-                                   allow_diagonal)
+        try:
+            success, path_px = c_astar(c_start,
+                                       c_goal,
+                                       c_occupancy_map,
+                                       obstacle_values,
+                                       delta,
+                                       epsilon,
+                                       planning_scale,
+                                       allow_diagonal)
+        except ValueError:
+            success = False
+            path_px = c_start.reshape(1,2) # just return the start point.
 
         return success, path_px
     
@@ -317,7 +322,8 @@ class MASTER:
         
         
         self.robot_number = robot_number - 1
-        
+        self.failedPlans = 0
+        self.done = False
         local_ports = ports # Some ports are obsolete and need removing
         pose_port = local_ports[0] 
         depthcamera_port = local_ports[1] 
@@ -353,7 +359,9 @@ class MASTER:
             if time.time() >= prev_time + 1 / self.frequency: # Sync with sensor frequency (reduces un-necesary compute)
                 img_num += 1
                 prev_time = time.time()
-
+                
+                if self.done:
+                    continue
 
                 if start_simulation_ == True:
                     start_simulation_ = False
@@ -366,6 +374,10 @@ class MASTER:
                         self.control.take_random_action(odo_pos[:-1], pose_offset, i)
 
                     continue
+                
+                
+                
+                
                 plot_obj, _,_ = self.dcam_pose.points_cloud_update(plot_obj, img_num)
                 occ_grid, pose_offset, pose_grid = self.dcam_pose.occupancy_grid_update()
                 print('OCCUPANCY GRID SHAPE : ',occ_grid.shape)
@@ -382,15 +394,23 @@ class MASTER:
                 try:
                     waypointPathGrid = self.planner.astarPlanner(occ_grid_planning, start_state = pose_grid, robot_number = self.robot_number) # Plans based on Frontiers.
                     
-                except IndexError: # this is a rather un-explainable error.
-                    print('ERROR : SOMETHING WENT WRONG IN THE PLANNER')
+                except IndexError: # maybe the map is explored.
+                    print('Planner Failed.')
                     waypointPathGrid = None
                     
-                
-                
+
 
                 if not waypointPathGrid is None: # TODO : Wrap transform into a function
                     
+                    show_grid_ = cv2.cvtColor(occ_grid_planning, cv2.COLOR_GRAY2BGR)
+                    show_grid_[waypointPathGrid[:,1],waypointPathGrid[:,0]] = (255,0,0)
+                    show_grid_[waypointPathGrid[:,1]+1,waypointPathGrid[:,0]+1] = (255,0,0)
+                    show_grid_[waypointPathGrid[:,1]-1,waypointPathGrid[:,0]-1] = (255,0,0)
+                    # show_grid_ = inflate(occ_grid_planning, waypointPathGrid.T)
+                    cv2.imshow("Map with Path", show_grid_)
+                    cv2.waitKey(15)
+                    
+
                     waypointPath = self.dcam_pose.occ.xy_from_grid_cell(waypointPathGrid) # converts to egocentric frame
                     waypointPath = np.add(waypointPath, pose_offset.reshape(2,-1//2)).T # converts to world frame
                     assert waypointPath.shape[-1] == 2
@@ -404,7 +424,7 @@ class MASTER:
                             # desired_yaw = desired_yaw[np.arange(0, len(desired_yaw)-1, 25).astype(int)]
                             if waypointPath.shape[0] > 160:
                                 waypointPath = waypointPath[np.linspace(0, waypointPath.shape[0]-1, 60).astype(int)]
-                            else: # if the planner fails, we scan the area by rotating and hoe to find new frontiers.
+                            else: # if the planner fails, we scan the area by rotating
                                 odo_pos[:-1] = self.dcam_pose.get_current_pose() - pose_offset
                                 for i in np.linspace(0, 2*np.pi, 7):
                                     self.control.take_random_action(odo_pos, pose_offset, i)
@@ -423,13 +443,29 @@ class MASTER:
                                         plot_obj, _,_ = self.dcam_pose.points_cloud_update(plot_obj, img_num, write_data = write_data)
                                         occ_grid, pose_offset, pose_grid = self.dcam_pose.occupancy_grid_update()
 
-
+                            for i in np.linspace(0, 2*np.pi, 15): # simply scan in position first to generate some frontiers
+                                odo_pos[:-1] = self.dcam_pose.get_current_pose()
+                                plot_obj, _,_ = self.dcam_pose.points_cloud_update(plot_obj, img_num)
+                                occ_grid, pose_offset, pose_grid = self.dcam_pose.occupancy_grid_update()
+                                odo_pos[:-1] = odo_pos[:-1] - pose_offset
+                                self.control.take_random_action(odo_pos[:-1], pose_offset, i)
                             odo_pos[:-1] = self.dcam_pose.get_current_pose() - pose_offset
                             
                 else: # if the planner fails, we scan the area by rotating and hoe to find new frontiers.
                     odo_pos[:-1] = self.dcam_pose.get_current_pose() - pose_offset
-                    for i in np.linspace(0, 2*np.pi, 3):
+                    self.failedPlans += 1
+                    print('Try Number : ',self.failedPlans )
+                    for i in np.linspace(0, 2*np.pi, 5):
                         self.control.take_random_action(odo_pos, pose_offset, i)
+                        plot_obj, _,_ = self.dcam_pose.points_cloud_update(plot_obj, img_num)
+                        occ_grid, pose_offset, pose_grid = self.dcam_pose.occupancy_grid_update()
+                if self.failedPlans >= 9: # 9 consecutive planning fails
+                    # visulaize one last time and exit.
+                    # show_grid_ = cv2.cvtColor(, cv2.COLOR_GRAY2BGR)
+                    cv2.imshow("Map with Path", occ_grid_planning)
+                    cv2.waitKey(15)
+                    # self.control.close_connection() # gracefully closing connection.
+                    self.done = True
                         
                     
                     

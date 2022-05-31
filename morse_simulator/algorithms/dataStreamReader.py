@@ -1,6 +1,7 @@
 import socket
 import json
 import threading
+from morse_simulator.algorithms.config import config
 """Adapted Code"""
 
 class Reader(threading.Thread):
@@ -30,7 +31,7 @@ class Reader(threading.Thread):
         """
         total_data=[]
         while True:
-                data=self.sock.recv(512)
+                data=self.sock.recv(512 * (config.num_robots_per_senv+2))
                 data = data.decode('utf-8')
                 if Reader.End in data:
                     total_data.append(data[:data.find(Reader.End)])

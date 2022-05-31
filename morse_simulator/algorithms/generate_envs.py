@@ -25,7 +25,7 @@ def generateEnvs():
         save_running_suIdx(superIdx)
         #subprocess.call(f'gnome-terminal --tab -- morse run robot_initialization.py', shell = True) # This call should necessarily be blocking.
         subprocess.call(f'gnome-terminal --tab -- morse run {initPath}/RLrobot_initialization.py', shell = True)
-        time.sleep(1.5) # enforces synchronization
+        time.sleep(0.85 * num_robots_per_senv) # enforces synchronization
     save_env_generation_status(1) # save status '1' after generting environments.
     
     

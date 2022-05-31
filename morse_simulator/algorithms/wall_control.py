@@ -29,7 +29,9 @@ class Control:
         print('Connected')
         #except:
         #    print("Motion controller connection failed")
-
+    def close_connection(self):
+        self.sock.close()
+        return
     def take_random_action(self,pose, pose_offset, yaw):
         pose = pose # np.add(np.asarray(pose).reshape(1,2), np.asarray(pose_offset).reshape(1,2)) + np.random.randint(-2,2)*0.05
         waypoint = pose
@@ -61,9 +63,9 @@ class Control:
             
             msg = f"id{num} {robot_name}.motion rotate [0, 0, %f]\n" % (yaw)
             self.sock.send(msg.encode("utf-8"))
-            time.sleep(0.45) # some time to register and carry out the action.
+            time.sleep(0.01) # some time to register and carry out the action.
             msg = f"id{num} {robot_name}.motion translate [%f, %f, %f]\n" % (x,y,z)
-            time.sleep(0.45)
+            time.sleep(0.01)
             self.sock.send(msg.encode("utf-8"))
         except Exception as error_msg:
             print(error_msg)

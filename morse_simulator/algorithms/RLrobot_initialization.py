@@ -36,12 +36,9 @@ for i,element in enumerate(lines):
 corner_offsetx, corner_offsety = (24.98999786376953 - 12.7)/2,(19.94999885559082 - 12.7)/2 # these numbers have been calculated based on the length and width of the maps
 
 # Sensor Frequencies.
-IMU_FREQUENCY = 30  
-LIDAR_FREQUENCY = 30
+IMU_FREQUENCY = 30
 POSE_FREQUENCY = 30
 DCAM_FREQUENCY = 30
-VIDEOCAMERA_FREQUENCY = 30
-ODO_FREQUENCY = 30
 
 ports = list(genfromtxt(config.savePath + '/logs/port_information.csv', delimiter=',')[1:,:])
 
@@ -59,7 +56,7 @@ if startIndex != 0: # Fix for multiple servers having the same robot names.
     startIndex += 1
 
 with open(config.savePath + '/logs/NRobots.txt', 'r') as nrfile: 
-    max_robots_per_senv = int(nrfile.readline()[0])
+    max_robots_per_senv = int(nrfile.readlines()[0])
     print('Max Allowed Robots : ', max_robots_per_senv)
 
 server_port_index = (startIndex)//max_robots_per_senv # This is the port of the server that manages this sub-environment instance
@@ -130,8 +127,8 @@ for i in range(startIndex,startIndex + max_robots_per_senv):
     exec(f"robots_{i}.append(pose)")
     # ======================================================================================
     dcam = DepthCamera()
-    dcam.properties(cam_width=917)
-    dcam.properties(cam_height=17)
+    dcam.properties(cam_width=117)
+    dcam.properties(cam_height=117)
     dcam.properties(cam_far=25.0)
     dcam.properties(cam_near=0.01)
     dcam.frequency(DCAM_FREQUENCY)
@@ -154,8 +151,8 @@ with open(config.savePath + '/logs/currIndex.txt','w+') as currIndex:
     currIndex.write(f'{str(i)}')
 
 env = Environment(f'./workingSuperEnvironment/superEnvironment_{sIdx}.blend', fastmode=False)
-# env.set_time_scale(5) # DO NOT USE THIS.
-env.properties(longitude=54.371209, latitude=18.613334, altitude=30.0)
+#env.set_time_scale(5) # DO NOT USE THIS.
+# env.properties(longitude=54.371209, latitude=18.613334, altitude=30.0)
 # env._cfg_camera_scene(res_x = 917, res_y = 37) # not really working as of now.
 
 env.create(resolution_x = 917, resolution_y = 37) # testing custom render screens to save screen real-estate

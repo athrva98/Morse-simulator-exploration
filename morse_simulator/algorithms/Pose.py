@@ -250,9 +250,9 @@ class DepthCameraPose:
                             max([0, start[0,0]-5]):min([self.occ_map.shape[0], start[0,0]+5])] = 255 # account for robot footprint.
         #cv2.drawContours(image=self.occ_map, contours = [grid_p.T], contourIdx = -1, color = 255, thickness=-1)
         #mask = np.logical_and([grid_p[1,:-1] < self.occ_map.shape[0]],[grid_p[0,:-1] < self.occ_map.shape[1]])[0]
-        self.occ_map[grid_p[1,:-1], grid_p[0,:-1]] = 0 # obstacles are occupied.
-        self.occ_map = self._inflate_obstacles(self.occ_map, np.stack([grid_p[0,:-1],grid_p[1,:-1]], axis = 0))
         
+        self.occ_map = self._inflate_obstacles(self.occ_map, np.stack([grid_p[0,:-1],grid_p[1,:-1]], axis = 0))
+        self.occ_map[grid_p[1,:-1], grid_p[0,:-1]] = 0 # obstacles are occupied.
         
         config.occupancy_grid = self.occ_map # this makes the occupancy grid available to the RL algorithms.
         # plt.figure()
