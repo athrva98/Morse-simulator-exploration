@@ -6,12 +6,12 @@ from morse_simulator.algorithms.serialization import *
 from morse_simulator.algorithms.start import start_simulations
 from morse_simulator.algorithms.config import config
 from morse_simulator.algorithms.env_modified import initialize
-from morse_simulator.algorithms.generateSuperEnvironments import generateSuperEnvs
+from morse_simulator.gym_wrapper.generateSuperEnvironments import generateSuperEnvs
 from morse_simulator.gym_wrapper.initializeEnvironment import generateEnvs
 
 def main():
     checkedOffest = False
-    # for i in range(int(config.maxIterations)): # Run 3 batches of 24 robots.
+    # for i in range(int(config.maxIterations)): 
     if not checkedOffest:
         offset = calculate_start_iteration()
         checkedOffest = True

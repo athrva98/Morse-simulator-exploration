@@ -6,9 +6,9 @@ from morse_simulator.gym_wrapper.morse_environment import morseConnection
 from morse_simulator.gym_wrapper.controllers import controllerInterface
 from morse_simulator.algorithms.costmap import Costmap
 from morse_simulator.gym_wrapper.controllers import controllerInterface
+from numpy import genfromtxt
 import time
 from morse_simulator.algorithms.config import config
-import morse_simulator.gym_wrapper.config as dynamic_cfg
 from morse_simulator.gym_wrapper import DepthCamera
 from pymorse import Morse # this allows us to add functionality like pausing the simulation, reseting objects etc.
 
@@ -19,40 +19,58 @@ class RobotMorseEnv(gym.Env):
         super(RobotMorseEnv, self).__init__()
         self.morse = morseConnection()
         self.controllerInterface = controllerInterface()
+        self.controller = self.controllerInterface.controller
         self._generate_action_space()
         self.map = DepthCamera.map_t()
-        
-        self.dcam = DepthCamera.DepthCameraPose(robot_number = 0, pose_port = dynamic_cfg.pose_port,
-                                                depth_camera_port = dynamic_cfg.depthcamera_port)
-        
-        self.observation_space = spaces.Box(low = 0., high = 1.,
-                                            shape = self.map.cells.shape, dtype = np.float16)
+        self.ports = list(genfromtxt(config.savePath + '/logs/port_information.csv', delimiter=',')[1:,:])
+        self.local_ports = list(np.array(self.ports)[:,1].astype(np.int32))
+        self.pose_port = self.local_ports[0] 
+        self.depthcamera_port = self.local_ports[1]
+        self.startTime = time.time()
+        self.maxTime = 100
+        self.dcam = DepthCamera.DepthCameraPose(robot_number = 0, pose_port = self.pose_port,
+                                                depth_camera_port = self.depthcamera_port)
+        print('OBSERVATION SPACE SHAPE : ', self.map.cells.shape)
+        self.observation_space = spaces.Box(low = 0, high = 255,
+                                            shape = (self.map.cells.shape[0], self.map.cells.shape[1], 1), dtype = np.uint8)
         
         self.reward_msg = {} # holds the reward information
         self.episode_num = 0 # episode tracker
         self.cumulated_episode_reward = 0
     
     def _generate_action_space(self):
+        low = -1.
+        high = 1.
         if config.controller == 'teleport':
             # TODO : set thresholds in the config.
-            low = np.array([-100., -100., 0, 0., -np.pi/5, -np.pi/5]).astype(np.float16)
-            high = np.array([100., 100., 11, 2*np.pi, np.pi/5, np.pi/5]).astype(np.float16)
+            # low = np.array([-100., -100., 0, 0., -np.pi/5, -np.pi/5]).astype(np.float16)
+            # high = np.array([100., 100., 11, 2*np.pi, np.pi/5, np.pi/5]).astype(np.float16)
+            low = np.repeat(low, 6).reshape(6,)
+            high = np.repeat(high, 6).reshape(6,)
             self.action_space = spaces.Box(low = low, high = high)
         if config.controller == 'waypoint':
-            low = np.array([-100., -100., 0., 0.]).astype(np.float16)
-            high = np.array([100., 100., 11, 2*np.pi]).astype(np.float16)
+            # low = np.array([-100., -100., 0., 0.]).astype(np.float16)
+            # high = np.array([100., 100., 11, 2*np.pi]).astype(np.float16)
+            low = np.repeat(low, 4).reshape(4,)
+            high = np.repeat(high, 4).reshape(4,)
             self.action_space = spaces.Box(low = low, high = high)
         if config.controller == 'engine-speed':
-            low = np.array([0., 0., 0., 0.]).astype(np.float16)
-            high = np.array([100., 100., 100., 100.]).astype(np.float16)
+            # low = np.array([0., 0., 0., 0.]).astype(np.float16)
+            # high = np.array([100., 100., 100., 100.]).astype(np.float16)
+            low = np.repeat(low, 4).reshape(4,)
+            high = np.repeat(high, 4).reshape(4,)
             self.action_space = spaces.Box(low = low, high = high)
         if config.controller == 'attitude':
-            low = np.array([-np.pi/5, -np.pi/5, 0., 0.]).astype(np.float16)
-            high = np.array([np.pi/5, np.pi/5, 2*np.pi, 100.]).astype(np.float16)
+            # low = np.array([-np.pi/5, -np.pi/5, 0., 0.]).astype(np.float16)
+            # high = np.array([np.pi/5, np.pi/5, 2*np.pi, 100.]).astype(np.float16)
+            low = np.repeat(low, 4).reshape(4,)
+            high = np.repeat(high, 4).reshape(4,)
             self.action_space = spaces.Box(low = low, high = high)
         if config.controller == 'velocity':
-            low = np.array([0., 0., 0., 0.]).astype(np.float16)
-            high = np.array([100., 100., 100., 100.]).astype(np.float16)
+            # low = np.array([0., 0., 0., 0.]).astype(np.float16)
+            # high = np.array([100., 100., 100., 100.]).astype(np.float16)
+            low = np.repeat(low, 4).reshape(4,)
+            high = np.repeat(high, 4).reshape(4,)
             self.action_space = spaces.Box(low = low, high = high)
     
     
@@ -64,7 +82,7 @@ class RobotMorseEnv(gym.Env):
         obs = self._get_obs()
         done = self._is_done()
         info = {}
-        reward = self._compute_reward(obs, done)
+        reward = self._compute_reward(obs)
         self.cumulated_episode_reward += reward
         info['observation'] = obs
         info['done'] = done
@@ -73,8 +91,8 @@ class RobotMorseEnv(gym.Env):
     
     def _get_obs(self):
         self.dcam.points_cloud_update()
-        _, _, _ = self.dcam.occupancy_grid_update()
-        return dynamic_cfg.occupancy_grid
+        occupancy_grid, _, _ = self.dcam.occupancy_grid_update()
+        return occupancy_grid
     
     def render(self, mode='human', close = False):
         print('=.=.=.=.=.=.=.=.=.=.=.=.=.=.=.=.=.=.=.=.=.=')
@@ -93,21 +111,14 @@ class RobotMorseEnv(gym.Env):
     
     def close(self):
         # TODO implement this in a process safe manner.
-        dynamic_cfg.close(dynamic_cfg.child_processes) # kills all the child processes.
+        self.morse.hardResetSim(restart = False)
     
     
     def _update_episode(self):
-        self._publish_reward_topic(self.cumulated_episode_reward,
-                                  self.episode_num)
-        dynamic_cfg.episode_reward = self.cumulated_episode_reward
+        
         self.episode_num += 1
         self.cumulated_episode_reward = 0
         
-    
-    def _publish_reward_topic(self, reward, episode_number = 1):
-        self.reward_msg['reward'] = reward
-        self.reward_msg['episode_number'] = episode_number
-        dyncmic_cfg.status_dict = self.reward_msg
         
     def _reset_sim(self, rtype = 'soft'):
         if rtype == 'soft':
@@ -116,7 +127,7 @@ class RobotMorseEnv(gym.Env):
             self.morse.hardResetSim()
         return True
     
-    def _isValidAction(self):
+    def _isValidAction(self, action):
         # Is the furnished action valid, given the controller?
         
         if self.controller == 'engine-speed':
@@ -156,7 +167,7 @@ class RobotMorseEnv(gym.Env):
         
     def _is_done(self):
         # TODO : Some way to furnish the time of simulation.
-        if time.time() - config.startTime >= config.maxTime:
+        if time.time() - self.startTime >= self.maxTime:
             self.close()
             return True
         if self.checkSabotage(): # if the robot became unstable and the simulation quit.
@@ -166,7 +177,7 @@ class RobotMorseEnv(gym.Env):
     def _compute_reward(self, obs):
         # TODO : implement this
         # Basically just the area explored at the end of each episode
-        reward = len(np.where(obs == Costmap.UNOCCUPIED)[0])
+        reward = len(np.where(obs == Costmap.FREE)[0])
         return reward
     
         

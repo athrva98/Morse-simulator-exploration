@@ -6,12 +6,12 @@ from morse_simulator.algorithms.depth_camera_server import DepthCameraServer
 from morse_simulator.algorithms.sensors_classes import Pose_server
 import numba
 import os
+import time
 import matplotlib.pyplot as plt
 from morse_simulator.algorithms.serialization import *
 import cv2
 from scipy.spatial import distance
 from morse_simulator.algorithms.config import config
-import morse_simulator.gym_wrapper.config as dynamic_cfg
 
 np.seterr('raise') # raise all errors
 
@@ -54,9 +54,8 @@ class map_t:
         y = -1*(s.resolution * (cy - 1) - (s.ymax - s.ymin)/2)
         return np.vstack([x.reshape(1,-1), y.reshape(1,-1)])
 
-@numba.jit (nopython = True)
-def rotation(x, y, z, yaw, pitch, roll, cam_rotate): # fast rotation into world frame using numba
-    xyz = np.array([x, y, z])
+def rotation(x, y, z, yaw, pitch, roll, cam_rotate): # fast rotation using numba
+    xyz = np.concatenate([x.reshape(1,-1), y.reshape(1,-1), z.reshape(1,-1)], axis = 0)
     pitch -= cam_rotate
     yaw_cos = np.cos(yaw)
     yaw_sin = np.sin(yaw)
@@ -70,8 +69,8 @@ def rotation(x, y, z, yaw, pitch, roll, cam_rotate): # fast rotation into world 
             yaw_sin * pitch_sin * roll_cos - yaw_cos * roll_sin]
     r3 = [-pitch_sin, pitch_cos * roll_sin, pitch_cos * roll_cos]
     r = np.array([r1, r2, r3])
-    xyz = np.dot(r, xyz)
-    return xyz[0], xyz[1], xyz[2]
+    xyz = np.einsum('ij,jk->ik',r, xyz).T
+    return xyz[:,0], xyz[:,1], xyz[:,2]
 
 class DepthCameraPose:
     def _superIndex(self):
@@ -137,21 +136,18 @@ class DepthCameraPose:
         self.pose_ = [pose_x, pose_y]
         if self.initial_offset == True:
             self.initial_pose = np.asarray([pose_x, pose_y])
+            self.iter_ = read_outer_iteration()
             self.initial_offset = False
         x, y, z = [], [], []
         rawPoints = points
-        for i in range(0, len(points) - 12, 12):
-            xyz = struct.unpack('fff', points[i:i + 12])
-            
-            x1p, y1p, z1p = self.rotation(xyz[2], xyz[0], xyz[1], yaw, pitch, roll, math.pi/8)
-            
-            xp = round(x1p + pose_x, 1)
-            yp = round(y1p + pose_y, 1)
-            zp = round(z1p + pose_z, 1)
-            x.append(xp)
-            y.append(yp)
-            z.append(zp)
-        self.depth_data_ = [x,y,z]
+        xyz = np.frombuffer(points, dtype = np.float32)
+        xyz = np.unique(np.round(xyz.reshape(len(xyz)//3,3),1), axis = 0)
+        x1p, y1p, z1p = self.rotation(xyz[:,2], xyz[:,0], xyz[:,1], yaw, pitch, roll, np.pi/8)
+        x = np.add(x1p, pose_x)
+        y = np.add(y1p, pose_y)
+        z = np.add(z1p, pose_z)
+        self.depth_data_ = np.unique(np.concatenate([x.reshape(-1,1),y.reshape(-1,1),z.reshape(-1,1)], axis = 1), axis = 0)
+        self.depth_data_ = [list(self.depth_data_[:,0]),list(self.depth_data_[:,1]),list(self.depth_data_[:,2])]
         return 1
     
     def ray_tracing(self, ends): # TODO : Speed this function using Numba/Cython/C++ bindings
@@ -224,17 +220,11 @@ class DepthCameraPose:
         self.occ_map = self._inflate_obstacles(self.occ_map, np.stack([grid_p[0,:-1][mask],grid_p[1,:-1][mask]], axis = 0))
         
         
-        dynamic_cfg.occupancy_grid = self.occ_map # this makes the occupancy grid available to the RL algorithms.
-        # plt.figure()
-        # plt.imshow(self.occ_map)
-        # plt.scatter([start[0,0], start[0,1]], [start[0,1], start[0,0]])
-        # plt.show()
-        # cv2.imshow(f'Map_{self.robot_number}', self.occ_map)
-        # cv2.waitKey(15)
-        # cv2.imwrite('./test.png', self.occ_map)
-        #print('Pose is : ', start)
-        #cv2.destroyAllWindows()
-        return self.occ_map, self.pose_offset, start.reshape(-1,1) # returns the current occupancy map, pose_offset, and the pose in grid frame.
+        cv2.imshow("Current Occupancy Map",self.occ_map)
+        cv2.waitKey(5)
+        
+        
+        return np.expand_dims(self.occ_map, axis = -1).astype(np.uint8), self.pose_offset, start.reshape(-1,1) # returns the current occupancy map, pose_offset, and the pose in grid frame.
     
     
     

@@ -64,9 +64,11 @@ class morseConnection:
         with Morse(port = self.server_port) as morse:
             morse.rpc('simulation', 'reset_objects') # this is a soft reset.
         return
-    def hardResetSim(self):
+    def hardResetSim(self, restart = True):
         # TODO : implement this without breaking the serverport.
-        config.close(config.child_processes) # kill all the child processes
-        self.hardResetMain()
-        raise NotImplementedError     
+        with Morse(port = self.server_port) as morse:
+            morse.rpc('simulation', 'terminate')
+        if restart == True:
+            self.hardResetMain()
+        # raise NotImplementedError     
         

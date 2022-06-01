@@ -26,7 +26,7 @@ def generateEnvs():
         if config.controller == 'teleport':
             
             subprocess.call(f'gnome-terminal --tab -- morse run {initPath}/TeleportInitialization.py', shell = True)
-            print('TELEPORT INITIALIZATION')
+            
         if config.controller == 'waypoint':
             subprocess.call(f'gnome-terminal --tab -- morse run {initPath}/waypointInitialization.py', shell = True)
         if config.controller == 'engine-speed':

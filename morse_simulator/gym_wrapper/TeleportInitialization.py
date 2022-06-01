@@ -4,7 +4,6 @@ from morse.builder import *
 from numpy import genfromtxt
 from morse.middleware.socket_request_manager import *
 from morse_simulator.algorithms.config import config
-import morse_simulator.gym_wrapper.config as dynamic_cfg
 """
 translation_coordinates.txt -> This file is generated from blender and tells morse where to place the robots in the sub-environments
 currentSuperIndex.log -> Keeps track of the super-environment in which we need to place the robots
@@ -63,11 +62,14 @@ with open(config.savePath + '/logs/robotServerPortCorrespondence.txt','a+') as r
         rsc.write(str(server_ports[server_port_index])+','+str(i))
         rsc.write('\n')
 k = -1
+
+
+
 for i in range(startIndex,startIndex + max_robots_per_senv):
     k += 1
     print('INDEX : ',i)
     local_ports = list(np.array(ports)[:,i+1].astype(np.int32))
-    print("Using Ports : ", local_ports)
+    # print("Using Ports : ", local_ports)
 
     pose_port = local_ports[0] 
     depthcamera_port = local_ports[1] 
@@ -91,7 +93,6 @@ for i in range(startIndex,startIndex + max_robots_per_senv):
     motion.translate(z=0.0)
 
     motion.add_stream('socket', port = motion_port)
-    dynamic_cfg.motion_port = motion_port
     motion.add_service('socket')
 
     exec(f"robots_{i}.append(motion)")
@@ -103,7 +104,6 @@ for i in range(startIndex,startIndex + max_robots_per_senv):
     pose.translate(TRANS_X, TRANS_Y, TRANS_Z)
     pose.frequency(POSE_FREQUENCY)
     pose.add_stream('socket', port=pose_port)
-    dynamic_cfg.pose_port = pose_port
     pose.add_service('socket')
 
     exec(f"robots_{i}.append(pose)")
@@ -117,8 +117,8 @@ for i in range(startIndex,startIndex + max_robots_per_senv):
     dcam.translate(TRANS_X, TRANS_Y, TRANS_Z + 0.17)      
     dcam.rotate(0.0, -math.pi/12, math.pi)       
     dcam.add_stream('socket', port=depthcamera_port)
-    dynamic_cfg.depthcamera_port = depthcamera_port
-    print('Config Depth Camera Port is : ', dynamic_cfg.depthcamera_port)
+    
+    
     dcam.add_interface('socket')
     exec(f"robots_{i}.append(dcam)")
 
