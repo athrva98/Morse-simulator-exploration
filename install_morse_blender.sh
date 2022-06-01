@@ -9,17 +9,17 @@ set -x \
 	&& sudo curl -SL "https://www.python.org/ftp/python/3.4.2/Python-3.4.2.tar.xz" \
 		| sudo tar -xJC /usr/src/python --strip-components=1 \
 	&& cd /usr/src/python \
-	&& sudo ./configure --enable-shared \
+	&& sudo ./configure --enable-shared --prefix=/usr \
 	&& sudo make -j$(nproc) \
 	&& sudo make install \
 	&& sudo ldconfig \
-	&& sudo find /usr/local \
+	&& sudo find /usr \
 		\( -type d -a -name test -o -name tests \) \
 		-o \( -type f -a -name '*.pyc' -o -name '*.pyo' \) \
 		-exec rm -rf '{}' + \
 	&& sudo rm -rf /usr/src/python
 
-cd /usr/local/bin \
+cd /usr/bin \
 	&& sudo ln -s easy_install-3.4 easy_install \
 	&& sudo ln -s idle3 idle \
 	&& sudo ln -s pip3 pip \
